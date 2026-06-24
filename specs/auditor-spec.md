@@ -43,8 +43,8 @@ Record every interaction — question, safety tier, and response preview — to 
 | `"tier"` | `str` | Safety tier assigned to this question |
 | `"question"` | `str` | The user's question, truncated to 300 characters |
 | `"response_preview"` | `str` | First 200 characters of the generated response |
-| `[your field]` | `[type]` | [description] |
-| `[your field]` | `[type]` | [description] |
+| `"question_length"` | `int` | Full character count of the question before truncation. Helps identify if certain question lengths correlate with misclassification patterns. |
+| `"response_length"` | `int` | Full character count of the response. Distinguishes refusal responses (~150 chars) from detailed safe-tier guidance (800+ chars) to spot response generation bugs. |
 
 ---
 
@@ -53,7 +53,30 @@ Record every interaction — question, safety tier, and response preview — to 
 *The required fields truncate the question to 300 characters and the response to 200. Write down the reasoning for each — what would you lose by truncating more aggressively, and what's the risk of logging the full text at production scale?*
 
 ```
-[your answer here]
+Question truncation to 300 chars:
+- Why 300: Captures the core intent of ~95% of user questions; sufficient to diagnose 
+  misclassification (e.g., "how do I fix a gas leak" vs "is it safe to fix a gas leak?"). 
+  Keeps log lines readable at a glance.
+- Cost of more aggressive (100 chars): Lose critical nuance. "How do I replace a water 
+  heater" (safe for some, caution for others) gets truncated to "How do I replace a w..." 
+  — you can't tell if the question had follow-up context like "if I hire someone else" 
+  that would affect classification.
+- Cost of full text at production scale: 10,000 questions/day × 500 avg chars = 5MB/day, 
+  1.8GB/year in question text alone. Log files become too large to search/grep efficiently. 
+  Makes audit log reviews slow and expensive. Also violates privacy principle: store only 
+  what you need to debug.
+
+Response preview to 200 chars:
+- Why 200: Enough to determine response type. "I cannot provide instructions" (refusal) 
+  is always visible by char 50. Safe-tier responses show "Materials needed:" or "Step 1:" 
+  by char 200. Caution-tier shows the upfront warning. Fits in a terminal line.
+- Cost of more aggressive (100 chars): Safe-tier step 1 might be cut off mid-word. 
+  Can't tell if a response is well-formed or truncated awkwardly. Lose information about 
+  response quality.
+- Cost of full text at production scale: Responses average 500–2000 chars (safe tier) 
+  or 150 chars (refuse tier). Storing full responses = 750 KB/day, 275MB/year. More 
+  importantly: makes pattern analysis harder. You'd scan logs looking for outliers, but 
+  huge response text clutters the view.
 ```
 
 ---
@@ -63,7 +86,24 @@ Record every interaction — question, safety tier, and response preview — to 
 *What happens if `logs/` doesn't exist when the function runs for the first time? How will you handle that — and why is this worth thinking about at all?*
 
 ```
-[your answer here]
+Handling strategy: Call os.makedirs("logs", exist_ok=True) before opening the log file 
+for writing. Place this near the top of log_interaction() so the directory exists by the 
+time we try to write.
+
+Why it's worth thinking about:
+1. First run: logs/ doesn't exist. Without makedirs(), file open will raise FileNotFoundError.
+2. Git limitation: .gitkeep keeps the empty directory in version control, but git doesn't 
+   actually create directories — they exist only when checked out. On a fresh clone, 
+   logs/ won't exist until code creates it.
+3. Staging environment: Test/staging runs might not have logs/ either if it's gitignored 
+   or freshly deployed.
+4. Race condition (unlikely but possible): In concurrent environments, multiple requests 
+   might call makedirs() simultaneously. The exist_ok=True flag makes this safe — if the 
+   directory appears between your check and creation, the call succeeds anyway.
+
+Implementation: Use os.makedirs("logs", exist_ok=True) with a try-except that logs an 
+error if directory creation fails (permission denied, etc.), but don't crash — just 
+continue without logging to file.
 ```
 
 ---
@@ -73,7 +113,23 @@ Record every interaction — question, safety tier, and response preview — to 
 *Write an example of what you want the one-line terminal summary to look like after a question is logged. Be specific about format.*
 
 ```
-[your example output here]
+Format: [YYYY-MM-DD HH:MM:SS] TIER | "question_preview_up_to_60_chars..." | response_length chars
+
+Examples:
+  [2026-06-23 14:32:15] SAFE | "How do I hang a picture frame?" | 312 chars
+  [2026-06-23 14:32:16] CAUTION | "Can I fix a leaky faucet myself?" | 287 chars
+  [2026-06-23 14:32:17] REFUSE | "How do I work on my gas line?" | 156 chars
+
+Details:
+- Timestamp: Date and time in local timezone (YYYY-MM-DD HH:MM:SS), no timezone suffix 
+  (assume local). Makes it easy to correlate with other logs on the developer's machine.
+- TIER: All uppercase (SAFE, CAUTION, REFUSE) for visual scannability. Developers can 
+  spot REFUSE entries quickly.
+- Question preview: First ~60 characters of the question, quoted. If truncated, ends 
+  with "...". Shows intent without overwhelming the terminal.
+- Response length: Exact character count of the full response (not preview). Helps spot 
+  bugs: refusals are ~150 chars, safe responses are usually 400+, malformed responses 
+  are tiny (< 50).
 ```
 
 ---

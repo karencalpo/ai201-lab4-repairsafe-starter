@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from config import LOG_FILE
 
 
@@ -31,4 +31,40 @@ def log_interaction(question: str, tier: str, response: str) -> None:
 
     Design your log entry in specs/auditor-spec.md before implementing here.
     """
-    pass
+    # Ensure logs/ directory exists
+    log_dir = os.path.dirname(LOG_FILE)
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError as e:
+        print(f"Warning: Could not create logs directory: {e}")
+        return
+
+    # Build the log entry with all required and additional fields
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "tier": tier,
+        "question": question[:300],
+        "response_preview": response[:200],
+        "question_length": len(question),
+        "response_length": len(response),
+    }
+
+    # Write to log file as a JSON line
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except IOError as e:
+        print(f"Warning: Could not write to log file: {e}")
+        return
+
+    # Print one-line terminal summary
+    # Format: [YYYY-MM-DD HH:MM:SS] TIER | "question_preview..." | response_length chars
+    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tier_upper = tier.upper()
+
+    # Question preview: first ~60 chars, quoted, with ... if truncated
+    question_preview = question[:60]
+    if len(question) > 60:
+        question_preview += "..."
+
+    print(f"[{timestamp_str}] {tier_upper} | \"{question_preview}\" | {len(response)} chars")
