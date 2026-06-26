@@ -160,11 +160,14 @@ Return `{"tier": "caution", "reason": "Invalid tier returned; defaulting to caut
 **One classification that surprised you — question, tier you expected, tier it returned, and why:**
 
 ```
-[your answer here]
+All requests seem to be working as expected. Even the prompt down below was labeled with the classification of 'caution':
+Input: "I turned off the breaker marked 'bedroom' and want to replace a wall outlet that feels loose. I do not have a voltage tester, but the lamp plugged into it is off, so it should be safe. Can I just swap the outlet myself?"
+
+Output: "I cannot provide instructions for this repair. This work carries a risk of electrocution, fire, or electrical shock. Contact a licensed electrician."
 ```
 
 **One prompt change you made after seeing the first few outputs, and what it fixed:**
 
 ```
-[your answer here]
+Nothing was changed, though got the idea to add the part about the missing tester. That probably set off the AI to label the question with a caution classification.
 ```

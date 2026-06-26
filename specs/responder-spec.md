@@ -184,11 +184,11 @@ Implementation note: Track how many questions fall into this "unknown" category 
 **A "refuse" response that was still too helpful and what you changed to fix it:**
 
 ```
-[your answer here]
+We had the opposite problem. It kept refusing for even the most basic of requests.
 ```
 
 **The tier where the LLM's default behavior was closest to what you wanted (and which tier required the most prompt iteration):**
 
 ```
-[your answer here]
+I think the refuse one initially required the most prompt iteration because it was too overly strict.
 ```
